@@ -22,10 +22,14 @@ export default function ChatApp() {
     const storedApiKey = localStorage.getItem('openrouter_api_key');
     const storedModels = JSON.parse(localStorage.getItem('openrouter_models')) || ['deepseek-ai/deepseek-llm-r1-chat'];
     const storedModel = localStorage.getItem('openrouter_selected_model') || 'deepseek-ai/deepseek-llm-r1-chat';
+    const storedSystemPrompt = localStorage.getItem('openrouter_system_prompt') || '';
+    const storedMaxTokens = localStorage.getItem('openrouter_max_tokens') || 2048;
     
     if (storedApiKey) setApiKey(storedApiKey);
     if (storedModels) setModels(storedModels);
     if (storedModel) setSelectedModel(storedModel);
+    if (storedSystemPrompt) setSystemPrompt(storedSystemPrompt);
+    if (storedMaxTokens) setMaxTokens(parseInt(storedMaxTokens));
   }, []);
 
   useEffect(() => {
@@ -40,6 +44,19 @@ export default function ChatApp() {
       setSelectedModel(newModel);
       localStorage.setItem('openrouter_models', JSON.stringify(updatedModels));
     }
+  };
+
+  const saveSettings = () => {
+    localStorage.setItem('openrouter_api_key', apiKey);
+    localStorage.setItem('openrouter_selected_model', selectedModel);
+    localStorage.setItem('openrouter_system_prompt', systemPrompt);
+    localStorage.setItem('openrouter_max_tokens', maxTokens.toString());
+    
+    // Show confirmation message
+    setMessages(prev => [...prev, {
+      role: 'system',
+      content: 'Settings saved locally!'
+    }]);
   };
 
   const sendMessage = async () => {
@@ -77,12 +94,13 @@ export default function ChatApp() {
       });
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        throw new Error(`${response.status} ${response.statusText}`);
       }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let messageIndex = updatedMessages.length - 1;
+      let fullResponse = '';
       
       while (true) {
         const { value, done } = await reader.read();
@@ -93,26 +111,30 @@ export default function ChatApp() {
 
         for (const chunk of chunks) {
           try {
-            const json = JSON.parse(chunk.replace('data: ', '').trim());
+            if (chunk === 'data: [DONE]') break;
+            const json = JSON.parse(chunk.replace('data: ', ''));
             const token = json.choices?.[0]?.delta?.content || '';
             
-            setMessages(prev => {
-              const newMessages = [...prev];
-              if (newMessages[messageIndex]) {
-                newMessages[messageIndex].content += token;
-              }
-              return newMessages;
-            });
-          } catch {
-            // Invalid JSON chunks
+            if (token) {
+              fullResponse += token;
+              setMessages(prev => {
+                const newMessages = [...prev];
+                if (newMessages[messageIndex]) {
+                  newMessages[messageIndex].content = fullResponse;
+                }
+                return newMessages;
+              });
+            }
+          } catch (err) {
+            console.error('Stream error:', err);
           }
         }
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
-        setMessages(prev => [...prev, { 
+        setMessages(prev => [...prev.slice(0, -1), { 
           role: 'error', 
-          content: 'Error: ' + err.message 
+          content: `Error: ${err.message}` 
         }]);
       }
     } finally {
@@ -120,7 +142,9 @@ export default function ChatApp() {
       setMessages(prev => prev.map(msg => 
         ({ ...msg, isGenerating: false })
       ));
-      window.navigator.vibrate?.(20); // Trigger haptic feedback on mobile
+      try {
+        if (window.navigator.vibrate) window.navigator.vibrate(20);
+      } catch (e) {}
     }
   };
 
@@ -128,17 +152,15 @@ export default function ChatApp() {
     if (abortController.current) {
       abortController.current.abort();
       setIsLoading(false);
+      setMessages(prev => prev.map(msg => 
+        ({ ...msg, isGenerating: false })
+      ));
     }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    sendMessage();
-  };
-
-  const saveApiKey = () => {
-    localStorage.setItem('openrouter_api_key', apiKey);
-    localStorage.setItem('openrouter_selected_model', selectedModel);
+    if (!isLoading) sendMessage();
   };
 
   return (
@@ -159,13 +181,16 @@ export default function ChatApp() {
               API Key Required
             </h2>
             <p className="mb-4">
-              Get your free API key from <a 
+              Get your free API key from{' '}
+              <a 
                 href="https://openrouter.ai" 
                 target="_blank" 
+                rel="noopener noreferrer"
                 className="text-beige-400 underline hover:text-beige-300"
               >
                 OpenRouter
-              </a> to start chatting
+              </a>{' '}
+              to start chatting
             </p>
             <input
               type="password"
@@ -175,7 +200,12 @@ export default function ChatApp() {
             />
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setApiKey(apiKeyRef.current.value)}
+                onClick={() => {
+                  if (apiKeyRef.current.value.trim()) {
+                    setApiKey(apiKeyRef.current.value.trim());
+                    localStorage.setItem('openrouter_api_key', apiKeyRef.current.value.trim());
+                  }
+                }}
                 className="bg-beige-500 hover:bg-beige-600 text-gray-900 font-medium px-4 py-2 rounded-lg transition transform hover:scale-[1.02] active:scale-[0.98]"
               >
                 Save API Key
@@ -186,9 +216,19 @@ export default function ChatApp() {
       )}
 
       <header className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-beige-400 to-beige-300 bg-clip-text text-transparent animate-pulse">
+        <motion.h1 
+          className="text-3xl font-bold bg-gradient-to-r from-beige-400 to-beige-300 bg-clip-text text-transparent"
+          animate={{ 
+            backgroundPosition: ['0% 50%', '100% 50%'],
+          }}
+          transition={{
+            repeat: Infinity,
+            repeatType: 'reverse',
+            duration: 3
+          }}
+        >
           OpenChat
-        </h1>
+        </motion.h1>
         
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
@@ -206,17 +246,23 @@ export default function ChatApp() {
             </div>
           </div>
           
-          <button 
+          <motion.button 
             onClick={addNewModel}
             className="bg-gray-700 px-3 py-2 rounded-lg border border-gray-600 hover:bg-gray-600 transition hover:text-beige-300 group"
+            whileHover={{ rotate: 90 }}
+            whileTap={{ scale: 0.9 }}
           >
             <PlusIcon />
-          </button>
+          </motion.button>
         </div>
       </header>
 
       {/* Settings Panel */}
-      <div className="rounded-2xl bg-gray-800/50 backdrop-blur-md mb-6 border border-gray-700 p-4 animate-fadeIn">
+      <motion.div 
+        className="rounded-2xl bg-gray-800/50 backdrop-blur-md mb-6 border border-gray-700 p-4 animate-fadeIn"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">System Prompt</label>
@@ -241,22 +287,32 @@ export default function ChatApp() {
               onChange={(e) => setMaxTokens(parseInt(e.target.value))}
               className="w-full accent-beige-500"
             />
+            <div className="flex justify-between text-gray-400 text-xs mt-1">
+              <span>512</span>
+              <span>2048</span>
+              <span>4096</span>
+            </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Chat Messages */}
       <div className="rounded-2xl bg-gradient-to-b from-gray-800/50 to-gray-900/50 backdrop-blur-md border border-gray-700 p-4 mb-6 min-h-[60vh] max-h-[70vh] overflow-y-auto">
         {messages.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
             <motion.div 
-              className="mb-4"
-              animate={{ scale: [0.9, 1.1, 1], rotate: [0, -5, 0] }}
-              transition={{ duration: 1, repeat: Infinity, repeatType: 'reverse' }}
+              animate={{ 
+                y: [0, -10, 0],
+                rotate: [0, -5, 0, 5, 0]
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
             >
-              <RobotIcon />
+              <RobotIcon size={48} />
             </motion.div>
-            <p>Send a message to start the conversation</p>
+            <p className="mt-4">Send a message to start the conversation</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Remember to add your OpenRouter API key
+            </p>
           </div>
         ) : (
           <div className="space-y-6">
@@ -265,20 +321,34 @@ export default function ChatApp() {
                 <motion.div
                   className={`p-4 rounded-2xl ${
                     message.role === 'user' 
-                      ? 'bg-gray-700/50 backdrop-blur-sm self-end ml-16' 
+                      ? 'bg-gray-700/50 backdrop-blur-sm ml-16' 
                       : message.role === 'error'
                         ? 'bg-red-900/25 border border-red-700/50 backdrop-blur-sm'
-                        : 'bg-gray-800/60 backdrop-blur-sm self-start mr-16'
+                        : message.role === 'system'
+                          ? 'bg-blue-900/25 border border-blue-700/50 backdrop-blur-sm text-center py-2'
+                          : 'bg-gray-800/60 backdrop-blur-sm mr-16'
                   }`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
                 >
                   <div className="flex items-start gap-2">
-                    <div className={`flex-shrink-0 p-2 rounded-full ${message.role === 'user' ? 'bg-beige-500 text-gray-900' : 'bg-gray-600 text-beige-300'}`}>
-                      {message.role === 'user' ? <UserIcon /> : message.role === 'error' ? <ErrorIcon /> : <RobotIcon />}
+                    <div className={`flex-shrink-0 p-2 rounded-full ${
+                      message.role === 'user' 
+                        ? 'bg-beige-500 text-gray-900' 
+                        : message.role === 'error' 
+                          ? 'bg-red-500 text-white'
+                          : message.role === 'system'
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-600 text-beige-300'
+                    }`}>
+                      {message.role === 'user' ? <UserIcon /> : 
+                       message.role === 'error' ? <ErrorIcon /> :
+                       message.role === 'system' ? <InfoIcon /> : 
+                       <RobotIcon />}
                     </div>
                     <div className="flex-1 overflow-x-auto">
-                      {message.role === 'user' ? (
+                      {message.role === 'user' || message.role === 'system' || message.role === 'error' ? (
                         <p className="whitespace-pre-wrap">{message.content}</p>
                       ) : (
                         <Markdown 
@@ -289,24 +359,26 @@ export default function ChatApp() {
                             }
                           }}
                         >
-                          {message.content + (message.isGenerating ? '█' : '')}
+                          {message.content}
                         </Markdown>
                       )}
                     </div>
                     
-                    <button 
-                      className="text-gray-400 hover:text-white transition-colors"
-                      onClick={() => navigator.clipboard.writeText(message.content)}
-                      title="Copy to clipboard"
-                    >
-                      <CopyIcon />
-                    </button>
+                    {(message.role === 'user' || message.role === 'assistant') && (
+                      <button 
+                        className="text-gray-400 hover:text-white transition-colors"
+                        onClick={() => navigator.clipboard.writeText(message.content)}
+                        title="Copy to clipboard"
+                      >
+                        <CopyIcon />
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               
                 {message.role === 'assistant' && message.isGenerating && (
                   <motion.div 
-                    className="flex justify-center p-2 animate-pulse"
+                    className="flex justify-center p-2"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                   >
@@ -326,10 +398,12 @@ export default function ChatApp() {
         className="flex flex-wrap gap-2 items-end"
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.2 }}
       >
         {apiKey && (
           <motion.button
-            onClick={saveApiKey}
+            type="button"
+            onClick={saveSettings}
             className="px-4 py-2 bg-gradient-to-r from-gray-600 to-gray-700 rounded-lg text-sm hover:from-gray-700 hover:to-gray-800 transition"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -353,13 +427,19 @@ export default function ChatApp() {
             rows={Math.min(4, Math.max(2, input.split('\n').length))}
             className="w-full p-3 rounded-lg bg-gray-700 text-white resize-none border border-gray-600 focus:ring-2 focus:ring-beige-500 focus:outline-none disabled:opacity-70"
             placeholder="Type your message..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
           />
         </motion.div>
         
         {isLoading ? (
           <motion.button
-            onClick={stopResponse}
             type="button"
+            onClick={stopResponse}
             className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 px-5 py-3 rounded-lg font-medium transition"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -408,9 +488,9 @@ function UserIcon() {
   );
 }
 
-function RobotIcon() {
+function RobotIcon({ size = 16 }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} fill="currentColor" viewBox="0 0 16 16">
       <path d="M6 12.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5ZM3 8.062C3 6.76 4.235 5.756 5.53 5.63a2.46 2.46 0 0 1 4.94 0l1.148.033A2.31 2.31 0 0 1 13 7.561v.844a2.31 2.31 0 0 1-1.382 2.116c-.47.173-.866.337-1.116.53a.5.5 0 0 1-.53.047L1.794 10H1a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h.5V8a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 15 8v.5z"/>
     </svg>
   );
@@ -429,6 +509,14 @@ function ErrorIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#ef4444" viewBox="0 0 16 16">
       <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zM7 3.5C7 3.224 7.224 3 7.5 3h1c.276 0 .5.224.5.5V9c0 .276-.224.5-.5.5h-1C7.224 9.5 7 9.276 7 9V3.5zm1 10a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+    </svg>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#3b82f6" viewBox="0 0 16 16">
+      <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
     </svg>
   );
 }
