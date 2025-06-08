@@ -1,0 +1,43 @@
+/* app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-gray-800 to-gray-900 text-white;
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  .animate-fadeIn {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  .animate-fadeInRight {
+    animation: fadeInRight 0.5s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @keyframes fadeInRight {
+    from { opacity: 0; transform: translateX(10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  
+  .bg-beige-300 { background-color: #d2b48c; }
+  .bg-beige-400 { background-color: #c6a27c; }
+  .bg-beige-500 { background-color: #b2916d; }
+  .bg-beige-600 { background-color: #9e7f5e; }
+  
+  .text-beige-300 { color: #d2b48c; }
+  .text-beige-400 { color: #c6a27c; }
+  .text-beige-500 { color: #b2916d; }
+  
+  .border-beige-500 { border-color: #b2916d; }
+  .focus:ring-beige-500:focus { --tw-ring-color: rgba(178, 145, 109, 0.5); }
+}
