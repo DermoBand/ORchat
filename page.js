@@ -18,7 +18,6 @@ export default function ChatApp() {
   const apiKeyRef = useRef(null);
 
   useEffect(() => {
-    // Fetch from localStorage
     const storedApiKey = localStorage.getItem('openrouter_api_key');
     const storedModels = JSON.parse(localStorage.getItem('openrouter_models')) || ['deepseek-ai/deepseek-llm-r1-chat'];
     const storedModel = localStorage.getItem('openrouter_selected_model') || 'deepseek-ai/deepseek-llm-r1-chat';
@@ -29,7 +28,7 @@ export default function ChatApp() {
     if (storedModels) setModels(storedModels);
     if (storedModel) setSelectedModel(storedModel);
     if (storedSystemPrompt) setSystemPrompt(storedSystemPrompt);
-    if (storedMaxTokens) setMaxTokens(parseInt(storedMaxTokens));
+    setMaxTokens(parseInt(storedMaxTokens));
   }, []);
 
   useEffect(() => {
@@ -52,7 +51,6 @@ export default function ChatApp() {
     localStorage.setItem('openrouter_system_prompt', systemPrompt);
     localStorage.setItem('openrouter_max_tokens', maxTokens.toString());
     
-    // Show confirmation message
     setMessages(prev => [...prev, {
       role: 'system',
       content: 'Settings saved locally!'
@@ -70,7 +68,6 @@ export default function ChatApp() {
     setInput('');
     setIsLoading(true);
 
-    // Prepare request
     abortController.current = new AbortController();
     
     try {
@@ -165,7 +162,6 @@ export default function ChatApp() {
 
   return (
     <div className="container mx-auto px-3 py-6 max-w-4xl">
-      {/* API Key Setup Modal */}
       {!apiKey && (
         <motion.div 
           className="fixed inset-0 bg-gray-900/80 backdrop-blur z-50 flex items-center justify-center p-4"
@@ -206,7 +202,7 @@ export default function ChatApp() {
                     localStorage.setItem('openrouter_api_key', apiKeyRef.current.value.trim());
                   }
                 }}
-                className="bg-beige-500 hover:bg-beige-600 text-gray-900 font-medium px-4 py-2 rounded-lg transition transform hover:scale-[1.02] active:scale-[0.98]"
+                className="bg-beige-500 hover:bg-beige-600 text-gray-900 font-medium px-4 py-2 rounded-lg transition hover:scale-[1.02] active:scale-[0.98]"
               >
                 Save API Key
               </button>
@@ -257,7 +253,6 @@ export default function ChatApp() {
         </div>
       </header>
 
-      {/* Settings Panel */}
       <motion.div 
         className="rounded-2xl bg-gray-800/50 backdrop-blur-md mb-6 border border-gray-700 p-4 animate-fadeIn"
         initial={{ opacity: 0, y: -20 }}
@@ -296,7 +291,6 @@ export default function ChatApp() {
         </div>
       </motion.div>
 
-      {/* Chat Messages */}
       <div className="rounded-2xl bg-gradient-to-b from-gray-800/50 to-gray-900/50 backdrop-blur-md border border-gray-700 p-4 mb-6 min-h-[60vh] max-h-[70vh] overflow-y-auto">
         {messages.length === 0 ? (
           <div className="text-center py-12 text-gray-400">
@@ -392,7 +386,6 @@ export default function ChatApp() {
         )}
       </div>
 
-      {/* Input Area */}
       <motion.form 
         onSubmit={handleSubmit}
         className="flex flex-wrap gap-2 items-end"
@@ -462,7 +455,6 @@ export default function ChatApp() {
   );
 }
 
-// UI Components
 function ChevronIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
